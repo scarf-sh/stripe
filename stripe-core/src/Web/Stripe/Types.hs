@@ -122,6 +122,23 @@ instance FromJSON StatementDescription where
   parseJSON v = StatementDescription <$> parseJSON v
 
 ------------------------------------------------------------------------------
+
+newtype TransferDestination = TransferDestination Text deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+-- | JSON Instance for `TransferDestination`
+instance FromJSON TransferDestination where
+   parseJSON (String x) = pure $ TransferDestination x
+   parseJSON _          = mzero
+
+
+------------------------------------------------------------------------------
+
+newtype ChargeSource = ChargeSource Text deriving (Read, Show, Eq, Ord, Data, Typeable)
+instance FromJSON ChargeSource where
+   parseJSON (String x) = pure $ ChargeSource x
+   parseJSON _          = mzero
+
+------------------------------------------------------------------------------
 -- | `Charge` object in `Stripe` API
 data Charge = Charge {
       chargeId                   :: ChargeId
@@ -1524,6 +1541,90 @@ instance FromJSON Account where
    parseJSON _ = mzero
 
 ------------------------------------------------------------------------------
+
+data AuthCode = AuthorizationCode Text | RefreshToken Text
+  deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+newtype Scope = Scope Text
+  deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+------------------------------------------------------------------------------
+-- | `OAuth` Object
+data OAuth = OAuth {
+      oAuthAccessToken          :: Text
+    , oAuthScope                :: Text
+    , oAuthLivemode             :: Bool
+    , oAuthTokenType            :: Text
+    , oAuthRefreshToken         :: Text
+    , oAuthStripeUserId         :: Text
+    , oAuthStripePublishableKey :: Text
+} deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+------------------------------------------------------------------------------
+-- | JSON Instance for `OAuth`
+instance FromJSON OAuth where
+   parseJSON (Object o) =
+       OAuth <$> o .: "access_token"
+             <*> o .: "scope"
+             <*> o .: "livemode"
+             <*> o .: "token_type"
+             <*> o .: "refresh_token"
+             <*> o .: "stripe_user_id"
+             <*> o .: "stripe_publishable_key"
+   parseJSON _ = mzero
+
+------------------------------------------------------------------------------
+data CancelUrl = CancelUrl Text
+  deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+data SuccessUrl = SuccessUrl Text
+  deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+instance FromJSON SuccessUrl where
+   parseJSON (String url) = pure $ SuccessUrl url
+   parseJSON _            = mzero
+
+instance FromJSON CancelUrl where
+   parseJSON (String url) = pure $ CancelUrl url
+   parseJSON _            = mzero
+
+data StripeLineItem = StripeLineItem {
+  stripeLineItemName          :: Text
+  , stripeLineItemDescription :: Maybe Text
+  , stripeLineItemImages      :: Maybe [Text]
+  , stripeLineItemAmount      :: Integer
+  , stripeLineItemCurrency    :: Currency
+  , stripeLineItemQuantity    :: Integer
+  } deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+instance FromJSON StripeLineItem where
+   parseJSON (Object o) =
+       StripeLineItem <$> o .: "name"
+             <*> o .: "description"
+             <*> o .: "images"
+             <*> o .: "amount"
+             <*> o .: "currency"
+             <*> o .: "quantity"
+   parseJSON _ = mzero
+
+newtype LineItems = LineItems [StripeLineItem]
+  deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+data Session = Session {
+  sessionId         :: Text,
+  sessionSuccessUrl :: SuccessUrl,
+  sessionCancelUrl  :: CancelUrl
+                       }
+  deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+instance FromJSON Session where
+   parseJSON (Object o) =
+       Session <$> o .: "id"
+             <*> o .: "success_url"
+             <*> o .: "cancel_url"
+   parseJSON _ = mzero
+
+------------------------------------------------------------------------------
 -- | `Balance` Object
 data Balance = Balance {
       balancePending   :: [BalanceAmount]
@@ -2491,6 +2592,20 @@ newtype PaymentId = PaymentId Text
 -- | FromJSON for PaymentId
 instance FromJSON PaymentId where
    parseJSON (String x) = pure $ PaymentId x
+   parseJSON _          = mzero
+
+
+------------------------------------------------------------------------------
+
+data AccountLoginLink = AccountLoginLink {
+  accountLoginLinkUrl     :: Text,
+  accountLoginLinkCreated :: UTCTime
+                                         } deriving (Show, Eq)
+
+instance FromJSON AccountLoginLink where
+   parseJSON (Object o) =
+     AccountLoginLink <$> o .: "url"
+                      <*> (fromSeconds <$> o .: "created")
    parseJSON _ = mzero
 
 ------------------------------------------------------------------------------

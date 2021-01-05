@@ -29,16 +29,21 @@ module Web.Stripe.Account
     ( -- * API
       GetAccountDetails
     , getAccountDetails
+    , GetAccountLoginLink
+    , getAccountLoginLink
       -- * Types
     , Account   (..)
+    , AccountLoginLink  (..)
     , AccountId (..)
     ) where
 
-import           Web.Stripe.StripeRequest (Method (GET),
+import           Web.Stripe.StripeRequest (Method (GET, POST),
                                            StripeRequest (..),
                                            StripeReturn, mkStripeRequest)
 import           Web.Stripe.Types         ( Account   (..)
-                                          , AccountId (..) )
+                                          , AccountId (..)
+                                          , AccountLoginLink (..))
+import           Web.Stripe.Util          ((</>))
 
 ------------------------------------------------------------------------------
 -- | Retrieve the object that represents your Stripe account
@@ -48,4 +53,13 @@ getAccountDetails :: StripeRequest GetAccountDetails
 getAccountDetails = request
   where request = mkStripeRequest GET url params
         url     = "account"
+        params  = []
+
+
+data GetAccountLoginLink
+type instance StripeReturn GetAccountLoginLink = AccountLoginLink
+getAccountLoginLink :: AccountId -> StripeRequest GetAccountLoginLink
+getAccountLoginLink (AccountId accId) = request
+  where request = mkStripeRequest POST url params
+        url     = "accounts" </> accId </> "login_links"
         params  = []

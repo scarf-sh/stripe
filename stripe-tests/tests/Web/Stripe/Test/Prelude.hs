@@ -66,8 +66,8 @@ toStripeRequestF
     :: (FromJSON ret, StripeReturn req ~ ret)
     => StripeRequest req
     -> StripeRequestF ret
-toStripeRequestF (StripeRequest m e q) =
-  StripeRequestF (StripeRequest m e q) fromJSON
+toStripeRequestF (StripeRequest m h e q a) =
+  StripeRequestF (StripeRequest m h e q a) fromJSON
 
 type Stripe = FreeT StripeRequestF IO
 type StripeSpec = (forall a. Stripe a -> IO (Either StripeError a)) -> Spec

@@ -67,17 +67,20 @@ defaultEndpoint = Endpoint "api.stripe.com" HTTPS 443
 ------------------------------------------------------------------------------
 -- | API Version
 data APIVersion =
-    V20141007 -- ^ Stripe API Version for this package release
+    V20141007 |  -- ^ Stripe API Version for this package release
+    V20190516    -- ^ Stripe API Version for this package release
     deriving (Eq, Ord, Data, Typeable)
 
 instance Show APIVersion where
     show V20141007 = "2014-10-07"
+    show V20190516 = "2019-05-16"
 
 instance Read APIVersion where
   readPrec =
     do (R.String s) <- lexP
        case s of
          "2014-10-07" -> return V20141007
+         "2019-05-16" -> return V20190516
          _            -> pfail
 
 ------------------------------------------------------------------------------

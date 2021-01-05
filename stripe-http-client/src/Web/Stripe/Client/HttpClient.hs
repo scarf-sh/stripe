@@ -22,6 +22,7 @@ module Web.Stripe.Client.HttpClient
 import qualified Control.Arrow
 import qualified Data.ByteString.Lazy     as BSL
 import           Data.Maybe
+import qualified Data.Text                as T
 import qualified Data.Text.Encoding       as TE
 import qualified Network.HTTP.Types       as Http
 
@@ -118,17 +119,20 @@ callAPI man fromJSON' config stripeRequest = do
   where
     mkStripeRequest =
 
-        let req = Http.applyBasicAuth (getStripeKey (secretKey config)) mempty $
+        let host = (S.host stripeRequest)
+            path = TE.encodeUtf8 (S.endpoint stripeRequest)
+            accountIdHeader = maybeToList $ (\acc -> ("Stripe-Account", toBytestring acc)) <$> (S.connectedAccountId stripeRequest)
+            req = Http.applyBasicAuth (getStripeKey (secretKey config)) mempty $
                   defaultRequest {
                     Http.method = m2m (S.method stripeRequest)
-                  , Http.secure = endpointProtocol (fromMaybe defaultEndpoint (stripeEndpoint config)) == HTTPS
-                  , Http.host = endpointUrl $ fromMaybe defaultEndpoint (stripeEndpoint config)
-                  , Http.port = endpointPort $ fromMaybe defaultEndpoint (stripeEndpoint config)
-                  , Http.path = "/v1/" <> TE.encodeUtf8 (S.endpoint stripeRequest)
-                  , Http.requestHeaders = [
+                  , Http.secure = True
+                  , Http.host = TE.encodeUtf8 host
+                  , Http.port = 443
+                  , Http.path = if ("connect" `T.isInfixOf` host) then path else "/v1/" <> path
+                  , Http.requestHeaders =  [
                         ("Stripe-Version", toBytestring stripeVersion)
                       , ("Connection", "Keep-Alive")
-                      ]
+                      ] ++ accountIdHeader
                   , Http.checkResponse = \_ _ -> return ()
                   }
 
@@ -161,4 +165,4 @@ urlEncodeBody headers req = req {
     body = pure (Http.renderSimpleQuery False headers)
 
 stripeVersion :: APIVersion
-stripeVersion = V20141007
+stripeVersion = V20190516

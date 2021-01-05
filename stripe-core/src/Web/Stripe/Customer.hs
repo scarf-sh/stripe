@@ -36,6 +36,7 @@ module Web.Stripe.Customer
       ---- * Update customer
     , UpdateCustomer
     , updateCustomer
+    , updateCustomerSource
       ---- * Delete customer
     , DeleteCustomer
     , deleteCustomer
@@ -86,6 +87,7 @@ import           Web.Stripe.Types           (AccountBalance(..), CVC (..),
                                              StripeDeleteResult (..),
                                              StripeList (..), TokenId (..),
                                              TrialEnd(..), ExpandParams(..))
+import qualified Data.Text.Encoding       as TE
 import           Web.Stripe.Types.Util
 
 ------------------------------------------------------------------------------
@@ -133,6 +135,15 @@ updateCustomer customerid = request
   where request = mkStripeRequest POST url params
         url     = "customers" </> getCustomerId customerid
         params  = []
+
+updateCustomerSource
+    :: CustomerId -- ^ `CustomerId` of `Customer` to update
+    -> TokenId
+    -> StripeRequest UpdateCustomer
+updateCustomerSource customerid (TokenId tokenId) = request
+  where request = mkStripeRequest POST url params
+        url     = "customers" </> getCustomerId customerid </> "sources"
+        params  = [("source", TE.encodeUtf8 tokenId)]
 
 data UpdateCustomer
 type instance StripeReturn UpdateCustomer = Customer

@@ -25,7 +25,11 @@ module Web.Stripe.StripeRequest
   , StripeHasParam
   , ToStripeParam(..)
   , (-&-)
+  , withConectedAccountId
   , mkStripeRequest
+  , mkStripeRequestToHost
+  , mkStripeRequestForAccount
+  , mkStripeRequestToHostForAccount
   ) where
 
 import           Control.Applicative ((<$>))
@@ -43,9 +47,12 @@ import           Web.Stripe.Types   (AccountBalance(..), AccountNumber(..),
                                      ApplicationFeeAmount(..),
                                      ApplicationFeePercent(..),
                                      AtPeriodEnd(..),
+                                     AuthCode(..),
                                      AvailableOn(..), BankAccountId(..),
                                      CardId(..), CardNumber(..),
+                                     CancelUrl(..),
                                      Capture(..), ChargeId(..), Closed(..),
+                                     ChargeSource(..),
                                      CouponId(..),
                                      Country(..), Created(..), Currency(..),
                                      CustomerId(..), CVC(..), Date(..),
@@ -67,11 +74,15 @@ import           Web.Stripe.Types   (AccountBalance(..), AccountNumber(..),
                                      RefundId(..),
                                      RefundApplicationFee(..), RefundReason(..),
                                      RoutingNumber(..), StartingAfter(..),
+                                     Scope(..),
                                      StatementDescription(..), Source(..),
-                                     SubscriptionId(..), TaxID(..), 
+                                     StripeLineItem(..),
+                                     SuccessUrl(..),
+                                     SubscriptionId(..), TaxID(..),
                                      TaxPercent(..), TimeRange(..),
                                      TokenId(..), TransactionId(..),
                                      TransactionType(..), TransferId(..),
+                                     TransferDestination(..),
                                      TransferStatus(..), TrialEnd(..),
                                      TrialPeriodDays(..))
 import           Web.Stripe.Util    (toBytestring, toExpandable,toMetaData,
@@ -100,15 +111,19 @@ newtype Param k v = Param (k, v)
 -- includes the function needed to decode the response.
 --
 data StripeRequest a = StripeRequest
-    { method      :: Method -- ^ Method of StripeRequest (i.e. `GET`, `PUT`, `POST`, `PUT`)
-    , endpoint    :: Text   -- ^ Endpoint of StripeRequest
-    , queryParams :: Params -- ^ Query Parameters of StripeRequest
+    { method             :: Method -- ^ Method of StripeRequest (i.e. `GET`, `PUT`, `POST`, `PUT`)
+    , host               :: Text   -- ^ Hostname of StripeRequest
+    , endpoint           :: Text   -- ^ Endpoint of StripeRequest
+    , queryParams        :: Params -- ^ Query Parameters of StripeRequest
+    , connectedAccountId :: Maybe Text -- ^ Connected account id
     }
 
 ------------------------------------------------------------------------------
 -- | convert a parameter to a key/value
 class ToStripeParam param where
   toStripeParam :: param -> [(ByteString, ByteString)] -> [(ByteString, ByteString)]
+  toStripeHeader :: param -> [(ByteString, ByteString)] -> [(ByteString, ByteString)]
+  toStripeHeader _ h = h
 
 instance ToStripeParam Amount where
   toStripeParam (Amount i) =
@@ -368,6 +383,10 @@ instance ToStripeParam a => ToStripeParam (Source a) where
       [(_, p)] -> (("source", p) :)
       _        -> error "source applied to non-singleton"
 
+instance ToStripeParam ChargeSource where
+  toStripeParam (ChargeSource s) =
+    (("source", Text.encodeUtf8 s) :)
+
 instance ToStripeParam SubscriptionId where
   toStripeParam (SubscriptionId sid) =
     (("subscription", Text.encodeUtf8 sid) :)
@@ -472,6 +491,49 @@ instance (ToStripeParam param) => ToStripeParam (EndingBefore param) where
       [(_, p)] -> (("ending_before", p) :)
       _        -> error "EndingBefore applied to non-singleton"
 
+instance ToStripeParam AuthCode where
+  toStripeParam (AuthorizationCode txt) =
+    ([("grant_type", "authorization_code"), ("code", Text.encodeUtf8 txt)] ++)
+  toStripeParam (RefreshToken txt) =
+    ([("grant_type", "refresh_token"), ("refresh_token", Text.encodeUtf8 txt)] ++)
+
+instance ToStripeParam Scope where
+  toStripeParam (Scope s) =
+    (("scope", Text.encodeUtf8 s) :)
+
+instance ToStripeParam SuccessUrl where
+  toStripeParam (SuccessUrl s) =
+    (("success_url", Text.encodeUtf8 s) :)
+
+instance ToStripeParam CancelUrl where
+  toStripeParam (CancelUrl s) =
+    (("cancel_url", Text.encodeUtf8 s) :)
+
+instance ToStripeParam [StripeLineItem] where
+  toStripeParam lineItems = ((concatMap toStripeParamSingle lineItems) ++)
+    where
+      toStripeParamSingle :: StripeLineItem -> [(ByteString, ByteString)]
+      toStripeParamSingle (StripeLineItem name desc maybeImages amount currency quantity) =
+        [ ("line_items[][name]", Text.encodeUtf8 name)
+        , ("line_items[][amount]", toBytestring amount)
+        , ("line_items[][currency]", toBytestring currency)
+        , ("line_items[][quantity]", toBytestring quantity)
+        ] ++
+        (maybe
+           []
+           (\d -> [("line_items[][description]", Text.encodeUtf8 d)])
+           desc) ++
+        (maybe
+           []
+           (\images ->
+              map (\i -> ("line_items[][image][]", Text.encodeUtf8 i)) images)
+           maybeImages)
+
+
+instance ToStripeParam TransferDestination where
+  toStripeParam (TransferDestination i) =
+    (("transfer_data[destination]", Text.encodeUtf8 i) :)
+
 ------------------------------------------------------------------------------
 -- | indicate if a request allows an optional parameter
 class (ToStripeParam param) => StripeHasParam request param where
@@ -487,6 +549,9 @@ stripeRequest -&- param =
                      toStripeParam param (queryParams stripeRequest)
                 }
 
+withConectedAccountId :: Text -> StripeRequest a -> StripeRequest a
+withConectedAccountId connectedId stripeRequest = stripeRequest {connectedAccountId=Just connectedId }
+
 ------------------------------------------------------------------------------
 -- | return type of stripe request
 type family StripeReturn a :: *
@@ -500,4 +565,29 @@ mkStripeRequest
     -> Text
     -> Params
     -> StripeRequest a
-mkStripeRequest m e q = StripeRequest m e q
+mkStripeRequest m e q = StripeRequest m "api.stripe.com" e q Nothing
+
+mkStripeRequestForAccount
+    :: Method
+    -> Text
+    -> Params
+    -> Text
+    -> StripeRequest a
+mkStripeRequestForAccount m e q a = StripeRequest m "api.stripe.com" e q (Just a)
+
+mkStripeRequestToHost
+    :: Method
+    -> Text
+    -> Text
+    -> Params
+    -> StripeRequest a
+mkStripeRequestToHost m h e q = StripeRequest m h e q Nothing
+
+mkStripeRequestToHostForAccount
+    :: Method
+    -> Text
+    -> Text
+    -> Params
+    -> Text
+    -> StripeRequest a
+mkStripeRequestToHostForAccount m h e q a = StripeRequest m h e q (Just a)
